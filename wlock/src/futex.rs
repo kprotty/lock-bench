@@ -1,6 +1,6 @@
 use core::{
     marker::PhantomData,
-    sync::atomic::{Ordering, AtomicI32, spin_loop_hint},
+    sync::atomic::{Ordering, AtomicI32},
 };
 
 pub unsafe trait Futex {
@@ -61,5 +61,8 @@ unsafe impl<F: Futex> lock_api::RawMutex for FutexLock<F> {
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 pub type Mutex<F, T> = lock_api::Mutex<FutexLock<F>, T>;
+
+#[cfg_attr(windows, allow(dead_code))]
 pub type MutexGuard<'a, T, F> = lock_api::MutexGuard<'a, FutexLock<F>, T>;
