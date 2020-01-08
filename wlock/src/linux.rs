@@ -13,7 +13,7 @@ unsafe impl futex::Futex for OsFutex {
     fn wait(ptr: *const i32, expected: i32) {
         unsafe {
             let atomic_ptr = &*(ptr as *const AtomicI32);
-            while atomic_ptr.load(Ordering::Acquire) != expected {
+            while atomic_ptr.load(Ordering::Acquire) == expected {
                 let r = syscall(SYS_futex, ptr, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, expected, 0);
                 debug_assert!(r == 0 || r == -1);
                 if r == -1 {

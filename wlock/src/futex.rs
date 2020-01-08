@@ -1,6 +1,6 @@
 use core::{
     marker::PhantomData,
-    sync::atomic::{Ordering, AtomicU8, AtomicI32},
+    sync::atomic::{Ordering, AtomicI32, spin_loop_hint},
 };
 
 pub unsafe trait Futex {
@@ -20,16 +20,6 @@ impl<F> FutexLock<F> {
             futex: PhantomData,
         }
     }
-
-    #[inline]
-    fn is_locked(&self) -> &AtomicU8 {
-        unsafe { &*(self as *const _ as *const AtomicU8) }
-    }
-
-    #[inline]
-    fn is_contended(&self) -> &AtomicU8 {
-        unsafe { &*(self as *const _ as *const AtomicU8).add(1) }
-    }
 }
 
 /// "Optimized Mutex" from https://locklessinc.com/articles/mutex_cv_futex/ 
@@ -39,30 +29,34 @@ unsafe impl<F: Futex> lock_api::RawMutex for FutexLock<F> {
     type GuardMarker = lock_api::GuardSend;
 
     fn try_lock(&self) -> bool {
-        self.is_locked().swap(1, Ordering::Acquire) == 0
+        self.state
+            .compare_exchange_weak(0, 1, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
     }
 
     fn lock(&self) {
-        if !self.try_lock() {
-            while self.state.swap(257, Ordering::Acquire) & 1 != 0 {
+        if let Err(mut state) = self.state.compare_exchange_weak(0, 1, Ordering::Acquire, Ordering::Relaxed) {
+            if state == 1 {
+                state = self.state.swap(2, Ordering::Acquire);
+            }
+            while state != 0 {
                 F::wait(&self.state as *const _ as *const i32, 2);
+                state = self.state.swap(2, Ordering::Acquire);
             }
         }
     }
 
     fn unlock(&self) {
-        if self.state.load(Ordering::Relaxed) == 1 {
-            if self.state.compare_exchange_weak(1, 0, Ordering::Release, Ordering::Relaxed).is_ok() {
+        if self.state.load(Ordering::Relaxed) == 2 {
+            self.state.store(0, Ordering::Release);
+        } else if self.state.swap(0, Ordering::Release) == 1 {
+            return;
+        }
+        if self.state.load(Ordering::Relaxed) != 0 {
+            if self.state.compare_exchange_weak(1, 2, Ordering::Release, Ordering::Relaxed).is_ok() {
                 return;
             }
         }
-
-        self.is_locked().store(0, Ordering::Release);
-        if self.is_locked().load(Ordering::Relaxed) != 0 {
-            return;
-        }
-
-        self.is_contended().store(0, Ordering::Release);
         F::wake(&self.state as *const _ as *const i32);
     }
 }
