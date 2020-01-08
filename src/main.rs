@@ -17,12 +17,14 @@ fn main() {
 
     bench::<mutexes::Std>(&options);
     bench::<mutexes::ParkingLot>(&options);
+    bench::<mutexes::WordMutex>(&options);
     bench::<mutexes::Spin>(&options);
     bench::<mutexes::AmdSpin>(&options);
 
     println!();
     bench::<mutexes::Std>(&options);
     bench::<mutexes::ParkingLot>(&options);
+    bench::<mutexes::WordMutex>(&options);
     bench::<mutexes::Spin>(&options);
     bench::<mutexes::AmdSpin>(&options);
 }
@@ -151,6 +153,15 @@ mod mutexes {
     pub(crate) type AmdSpin = crate::amd_spinlock::AmdSpinlock<u32>;
     impl Mutex for AmdSpin {
         const LABEL: &'static str = "AmdSpinlock";
+        fn with_lock(&self, f: impl FnOnce(&mut u32)) {
+            let mut guard = self.lock();
+            f(&mut guard)
+        }
+    }
+
+    pub(crate) type WordMutex = wlock::Mutex<u32>;
+    impl Mutex for WordMutex {
+        const LABEL: &'static str = "WordMutex";
         fn with_lock(&self, f: impl FnOnce(&mut u32)) {
             let mut guard = self.lock();
             f(&mut guard)

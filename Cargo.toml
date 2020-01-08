@@ -10,3 +10,4 @@ edition = "2018"
 crossbeam-utils = "0.7"
 parking_lot = "0.10"
 spin = "0.5"
+wlock = { path = "./wlock" }

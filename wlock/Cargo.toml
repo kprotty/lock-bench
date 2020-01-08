@@ -1,0 +1,17 @@
+[package]
+name = "wlock"
+version = "0.1.0"
+authors = ["kprotty"]
+edition = "2018"
+
+[dependencies.lock_api]
+version = "0.3"
+
+[target.'cfg(unix)'.dependencies.libc]
+version = "0.2"
+default-features = false
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.2"
+default-features = false
+features = []
