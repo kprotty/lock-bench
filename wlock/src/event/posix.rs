@@ -10,7 +10,7 @@ use libc::{
     pthread_mutex_lock,
     pthread_mutex_unlock,
     pthread_mutex_destroy,
-    PTHREAD_MUTEX_INITALIZER,
+    PTHREAD_MUTEX_INITIALIZER,
 };
 
 pub struct OsEvent {
@@ -30,7 +30,7 @@ impl OsEvent {
         Self {
             is_set: Cell::new(false),
             cond: UnsafeCell::new(PTHREAD_COND_INITIALIZER),
-            mutex: UnsafeCell::new(PTHREAD_MUTEX_INITALIZER),
+            mutex: UnsafeCell::new(PTHREAD_MUTEX_INITIALIZER),
         }
     }
 }
@@ -40,14 +40,14 @@ impl Drop for OsEvent {
         // Seems as though the destroy functions can return EAGAIN
         // when called using statically initialized types on DragonflyBSD.
         unsafe {
-            let r = pthread_mutex_destroy(self.mutex.as_ptr());
+            let r = pthread_mutex_destroy(self.mutex.get());
             if cfg!(target_os = "dragonfly") {
                 debug_assert!(r == 0 || r == libc::EAGAIN);
             } else {
                 debug_assert_eq!(r, 0);
             }
 
-            let r = pthread_cond_destroy(self.cond.as_ptr());
+            let r = pthread_cond_destroy(self.cond.get());
             if cfg!(target_os = "dragonfly") {
                 debug_assert!(r == 0 || r == libc::EAGAIN);
             } else {
