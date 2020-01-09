@@ -1,19 +1,12 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
-#[cfg(any(windows, target_os = "linux"))]
-mod futex;
+mod event;
+pub use self::event::Event;
+#[cfg(feature = "os")]
+pub use self::event::OsEvent;
 
-#[cfg(windows)]
-mod windows;
-#[cfg(windows)]
-pub use windows::*;
+mod mutex;
+pub use self::mutex::{RawMutex, RawMutexGuard};
+#[cfg(feature = "os")]
+pub use self::mutex::{Mutex, MutexGuard};
 
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-pub use linux::*;
-
-#[cfg(all(unix, not(target_os = "linux")))]
-mod posix;
-#[cfg(all(unix, not(target_os = "linux")))]
-pub use posix::*;

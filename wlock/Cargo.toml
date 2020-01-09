@@ -4,9 +4,25 @@ version = "0.1.0"
 authors = ["kprotty"]
 edition = "2018"
 
+[features]
+default = ["os"]
+os = ["libc", "winapi"]
+
 [dependencies.lock_api]
 version = "0.3"
 
 [target.'cfg(unix)'.dependencies.libc]
+optional = true
 version = "0.2"
 default-features = false
+
+[target.'cfg(windows)'.dependencies.winapi]
+optional = true
+version = "0.3"
+default-features = false
+features = [
+    "winnt",
+    "winbase",
+    "handleapi",
+    "libloaderapi",
+]
