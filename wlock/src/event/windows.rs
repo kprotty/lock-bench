@@ -1,22 +1,23 @@
-#![allow(non_upper_case_globals)]
+#![allow(non_upper_case_globals, non_snake_case)]
 
 use super::Event;
 use core::{
-    mem::{null_mut, size_of, transmute, MaybeUninit},
+    ptr::null_mut,
+    mem::{size_of, transmute, MaybeUninit},
     sync::atomic::{Ordering, AtomicU32, AtomicUsize},
 };
 use winapi::{
     shared::{
         basetsd::SIZE_T,
-        ntdef::NTSTATUS,
+        ntdef::{NTSTATUS, FALSE},
         ntstatus::STATUS_SUCCESS,
-        minwindef::{BOOL, TRUE, FALSE, DWORD, ULONG},
+        minwindef::{BOOL, TRUE, DWORD, ULONG},
     },
     um::{
         winbase::INFINITE,
         handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
         libloaderapi::{GetModuleHandleA, GetProcAddress},
-        winnt::{PVOID, PHANDLE, HANDLE, LARGE_INTEGER, ACCESS_MASK, BOOLEAN, GENERIC_READ, GENERIC_WRITE, LPCSTR},
+        winnt::{PVOID, PHANDLE, HANDLE, PLARGE_INTEGER, ACCESS_MASK, BOOLEAN, GENERIC_READ, GENERIC_WRITE, LPCSTR},
     },
 };
 
@@ -70,10 +71,10 @@ unsafe impl Event for OsEvent {
                         debug_assert_eq!(r, STATUS_SUCCESS);
                     },
                     Backend::WaitOnAddress => {
-                        let WakeAddressBySingle: extern "stdcall" fn(
+                        let WakeByAddressSingle: extern "stdcall" fn(
                             Address: PVOID,
-                        ) = transmute(_WakeAddressBySingle.load(Ordering::Relaxed));
-                        WakeAddressBySingle(&self.state as *const _ as PVOID);
+                        ) = transmute(_WakeByAddressSingle.load(Ordering::Relaxed));
+                        WakeByAddressSingle(&self.state as *const _ as PVOID);
                     },
                 }
             }
@@ -119,7 +120,7 @@ unsafe impl Event for OsEvent {
                     while self.state.load(Ordering::Acquire) != SET {
                         let r = WaitOnAddress(
                             &self.state as *const _ as PVOID,
-                            &SET as *const _ as PVOID,
+                            &WAIT as *const _ as PVOID,
                             size_of::<u32>() as SIZE_T,
                             INFINITE,
                         );
@@ -136,6 +137,7 @@ enum Backend {
     KeyedEvent(HANDLE),
 }
 
+const WAIT_ON_ADDRESS: usize = !0;
 static BACKEND_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
 unsafe fn get_backend() -> Backend {
@@ -149,13 +151,13 @@ unsafe fn get_backend() -> Backend {
                 unreachable!("OsEvent requires either WaitOnAddress (Win8+) or NT Keyed Events (WinXP+)")
             }
         },
-        INVALID_HANDLE_VALUE => Backend::WaitOnAddress,
+        WAIT_ON_ADDRESS => Backend::WaitOnAddress,
         handle => Backend::KeyedEvent(handle as HANDLE),
     }
 }
 
 static _WaitOnAddress: AtomicUsize = AtomicUsize::new(0);
-static _WakeAddressBySingle: AtomicUsize = AtomicUsize::new(0);
+static _WakeByAddressSingle: AtomicUsize = AtomicUsize::new(0);
 
 unsafe fn load_wait_on_address() -> bool {
     let dll = GetModuleHandleA(b"api-ms-win-core-synch-l1-2-0.dll\0".as_ptr() as LPCSTR);
@@ -177,14 +179,15 @@ unsafe fn load_wait_on_address() -> bool {
         _WakeByAddressSingle.store(WakeByAddressSingle as usize, Ordering::Relaxed);
     }
 
-    BACKEND_HANDLE.store(INVALID_HANDLE_VALUE, Ordering::Release);
+    assert_eq!(WAIT_ON_ADDRESS, INVALID_HANDLE_VALUE as usize);
+    BACKEND_HANDLE.store(WAIT_ON_ADDRESS, Ordering::Release);
     true
 }
 
 static _NtReleaseKeyedEvent: AtomicUsize = AtomicUsize::new(0);
 static _NtWaitForKeyedEvent: AtomicUsize = AtomicUsize::new(0);
 
-unsafe fn load_wait_on_address() -> bool {
+unsafe fn load_keyed_events() -> bool {
     let dll = GetModuleHandleA(b"ntdll.dll\0".as_ptr() as LPCSTR);
     if dll.is_null() {
         return false;
